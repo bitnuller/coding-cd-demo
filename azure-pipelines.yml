@@ -1,19 +1,47 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
+resources:
+- repo: self
+  fetchDepth: 1
 trigger:
-- master
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
-
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+- testing
+variables:
+  artifactName: 'Orchard.Web'
+jobs:
+- job: Build
+  displayName: Build application
+  condition: succeeded()
+  pool:
+    vmImage: vs2017-win2016
+    demands:
+    - msbuild
+    - visualstudio
+  variables:
+    solution: 'src\Orchard.sln'
+    buildPlatform: 'Any CPU'
+    buildConfiguration: 'Release'
+  steps:
+  - task: NuGetToolInstaller@0
+    displayName: 'Use NuGet 4.4.1'
+    inputs:
+      versionSpec: 4.4.1
+  - task: NuGetCommand@2
+    displayName: 'NuGet restore'
+    inputs:
+      restoreSolution: '$(solution)'
+  - task: VSBuild@1
+    displayName: 'Build solution'
+    inputs:
+      solution: '$(solution)'
+      msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactstagingdirectory)\\"'
+      platform: '$(buildPlatform)'
+      configuration: '$(buildConfiguration)'
+  - task: PublishSymbols@2
+    displayName: 'Publish symbols path'
+    continueOnError: true
+    inputs:
+      SearchPattern: '**\bin\**\*.pdb'
+      PublishSymbols: false
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact'
+    inputs:
+      PathtoPublish: '$(build.artifactstagingdirectory)/Orchard.Web.zip'
+      ArtifactName: '$(artifactName)'
